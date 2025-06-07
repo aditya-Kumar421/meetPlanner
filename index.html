@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meeting Scheduler</title>
+    <style>
+        body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 40px auto;
+    max-width: 800px;
+    background-color: #f9f9f9;
+    padding: 20px;
+    line-height: 1.6;
+    color: #333;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+h1, h2 {
+    color: #2c3e50;
+}
+
+textarea {
+    width: 100%;
+    height: 150px;
+    margin-bottom: 15px;
+    padding: 10px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    resize: vertical;
+    background-color: #fff;
+}
+
+button {
+    margin: 5px 0;
+    padding: 10px 20px;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: #2980b9;
+}
+
+input[type="number"] {
+    width: 120px;
+    padding: 8px;
+    margin: 5px 0;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    background-color: #fff;
+    font-size: 14px;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-top: 15px;
+    border-radius: 6px;
+    overflow: hidden;
+    background-color: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+th, td {
+    border: 1px solid #e0e0e0;
+    padding: 10px;
+    text-align: left;
+    font-size: 14px;
+}
+
+th {
+    background-color: #ecf0f1;
+    color: #2c3e50;
+}
+
+.success {
+    color: #27ae60;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+.error {
+    color: #e74c3c;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+    </style>
+</head>
+<body>
+    <h1>Meeting Scheduler</h1>
+    <label for="jsonInput">Paste JSON for /slots:</label><br>
+    <h4>Example: </h4>
+    <p>{"users": [{"id": 1, "busy": [["09:00","10:30"], ["13:00","14:00"]]}, {"id": 2, "busy": [["11:00","12:00"], ["15:00","16:00"]]}]}</p>
+    <textarea id="jsonInput" placeholder='{"users": [{"id": 1, "busy": [["09:00","10:30"], ["13:00","14:00"]]}, {"id": 2, "busy": [["11:00","12:00"], ["15:00","16:00"]]}]}'></textarea><br>
+    <button onclick="submitSlots()">Submit Slots</button><br>
+    <label for="durationInput">Meeting Duration (minutes):</label>
+    <input type="number" id="durationInput" value="30" min="1" step="1" required>
+    <button onclick="suggestMeeting()">Suggest</button>
+    <div id="message" class="success"></div>
+    <div id="error" class="error"></div>
+    <h2>Free Time Windows</h2>
+    <table id="freeSlotsTable">
+        <thead>
+            <tr>
+                <th>Start</th>
+                <th>End</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="freeSlotsBody"></tbody>
+    </table>
+
+    <h2>User Busy Slots</h2>
+    <label for="userIdInput">Enter User ID:</label>
+    <input type="number" id="userIdInput" min="1" step="1" required>
+    <button onclick="getUserBusySlots()">Show Busy Slots</button>
+    <table id="busySlotsTable">
+        <thead>
+            <tr>
+                <th>Start</th>
+                <th>End</th>
+            </tr>
+        </thead>
+        <tbody id="busySlotsBody"></tbody>
+    </table>
+
+    <script>
+        // Clear error and success messages
+        function clearMessages() {
+            document.getElementById('message').textContent = '';
+            document.getElementById('error').textContent = '';
+        }
+
+        // Submit JSON to /slots endpoint
+        async function submitSlots() {
+            clearMessages();
+            const jsonInput = document.getElementById('jsonInput').value;
+            try {
+                // Validate JSON
+                const payload = JSON.parse(jsonInput);
+                const response = await fetch('http://localhost:8000/slots', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(JSON.stringify(errorData));
+                }
+                const data = await response.json();
+                document.getElementById('message').textContent = data.message;
+            } catch (error) {
+                document.getElementById('error').textContent = 'Error submitting slots: ' + error.message;
+                console.error('Submit slots error:', error);
+            }
+        }
+
+        // Call /suggest endpoint with user-specified duration
+        async function suggestMeeting() {
+            clearMessages();
+            const durationInput = document.getElementById('durationInput').value;
+            const duration = parseInt(durationInput, 10); // Convert to integer
+            if (!duration || isNaN(duration) || duration <= 0) {
+                document.getElementById('error').textContent = 'Error: Please enter a valid duration (positive integer)';
+                return;
+            }
+            try {
+                console.log(`Fetching /suggest with duration: ${duration}`);
+                const response = await fetch(`http://localhost:8000/suggest?duration=${duration}`, {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(JSON.stringify(errorData));
+                }
+                const freeSlots = await response.json();
+                console.log('Free slots received:', freeSlots);
+                const tableBody = document.getElementById('freeSlotsBody');
+                tableBody.innerHTML = ''; // Clear table
+                if (freeSlots.length === 0) {
+                    document.getElementById('message').textContent = 'No free slots available for the specified duration.';
+                    return;
+                }
+                freeSlots.forEach(slot => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${slot[0]}</td>
+                        <td>${slot[1]}</td>
+                        <td><button onclick="bookSlot('${slot[0]}', '${slot[1]}')">Book</button></td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            } catch (error) {
+                document.getElementById('error').textContent = 'Error fetching suggestions: ' + error.message;
+                console.error('Suggest meeting error:', error);
+            }
+        }
+
+        // Placeholder for booking a slot (calls /book endpoint)
+        async function bookSlot(start, end) {
+            clearMessages();
+            try {
+                const response = await fetch('http://localhost:8000/book', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ start, end })
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(JSON.stringify(errorData));
+                }
+                const data = await response.json();
+                document.getElementById('message').textContent = data.message || 'Slot booked successfully';
+                // Refresh the table after booking
+                suggestMeeting();
+            } catch (error) {
+                document.getElementById('error').textContent = 'Error booking slot: ' + error.message;
+                console.error('Book slot error:', error);
+            }
+        }
+
+        // Fetch and display busy slots for a user
+        async function getUserBusySlots() {
+            clearMessages();
+            const userIdInput = document.getElementById('userIdInput').value;
+            const userId = parseInt(userIdInput, 10); // Convert to integer
+            if (!userId || isNaN(userId) || userId <= 0) {
+                document.getElementById('error').textContent = 'Error: Please enter a valid user ID (positive integer)';
+                return;
+            }
+            try {
+                console.log(`Fetching busy slots for user: ${userId}`);
+                const response = await fetch(`http://localhost:8000/calendar/${userId}`, {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(JSON.stringify(errorData));
+                }
+                const data = await response.json();
+                console.log('Busy slots received:', data);
+                const tableBody = document.getElementById('busySlotsBody');
+                tableBody.innerHTML = ''; // Clear table
+                if (!data.busy || data.busy.length === 0) {
+                    document.getElementById('message').textContent = `No busy slots for user ${userId}.`;
+                    return;
+                }
+                data.busy.forEach(slot => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${slot[0]}</td>
+                        <td>${slot[1]}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+                document.getElementById('message').textContent = `Busy slots for user ${userId} loaded successfully.`;
+            } catch (error) {
+                document.getElementById('error').textContent = 'Error fetching busy slots: ' + error.message;
+                console.error('Get busy slots error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
