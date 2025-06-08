@@ -51,7 +51,7 @@ If given two additional days, I would prioritize the following enhancements:
 ### Steps
 1. **Clone the Repository**
    ```bash
-   git clone https://github.com/your-username/meeting-scheduler.git
+   git clone https://github.com/aditya-Kumar421/meetPlanner.git
    cd meeting-scheduler
 2. **Create a Virtual Environment**
    ```bash
