@@ -15,16 +15,13 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# In-memory store for user busy slots and booked slots
 users_busy_slots = {}
-booked_slots = []  # For /book endpoint (optional)
+booked_slots = []  
 
-# Define IST timezone
 IST = pytz.timezone("Asia/Kolkata")
 
-# Pydantic models for request validation
 class BusySlot(RootModel):
-    root: List[str]  # List of exactly two strings: [start, end]
+    root: List[str]  
 
 class UserSlots(BaseModel):
     id: int
@@ -37,24 +34,24 @@ class BookSlot(BaseModel):
     start: str
     end: str
 
-# Helper function to parse HH:MM time string to datetime
+
 def parse_time(time_str: str, base_date: datetime) -> datetime:
     try:
         return datetime.strptime(f"{base_date.date()} {time_str}", "%Y-%m-%d %H:%M").replace(tzinfo=IST)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid time format: {time_str}. Use HH:MM")
 
-# Helper function to format datetime to HH:MM
+
 def format_time(dt: datetime) -> str:
     return dt.strftime("%H:%M")
 
-# Helper function to check if a time slot is within workday (09:00–18:00 IST)
+
 def is_within_workday(start: datetime, end: datetime) -> bool:
     workday_start = start.replace(hour=9, minute=0, second=0, microsecond=0)
     workday_end = start.replace(hour=18, minute=0, second=0, microsecond=0)
     return workday_start <= start and end <= workday_end
 
-# POST /slots - Store user busy slots
+
 @app.post("/slots")
 async def store_slots(slots: SlotsRequest):
     today = datetime.now(IST)
@@ -74,7 +71,7 @@ async def store_slots(slots: SlotsRequest):
         users_busy_slots[user.id] = validated_slots
     return {"message": "Slots stored successfully"}
 
-# GET /suggest?duration - Suggest earliest common free time windows
+
 @app.get("/suggest")
 async def suggest_meeting(duration: int = 30):
     if duration <= 0:
@@ -113,7 +110,7 @@ async def suggest_meeting(duration: int = 30):
     result = [[format_time(start), format_time(end)] for start, end in free_slots[:3]]
     return result
 
-# GET /calendar/:userId - Get user's busy slots
+
 @app.get("/calendar/{user_id}")
 async def get_calendar(user_id: int):
     if user_id not in users_busy_slots:
@@ -121,7 +118,7 @@ async def get_calendar(user_id: int):
     busy_slots = [[format_time(start), format_time(end)] for start, end in users_busy_slots[user_id]]
     return {"user_id": user_id, "busy": busy_slots}
 
-# POST /book - Optional endpoint to book a slot
+
 @app.post("/book")
 async def book_slot(slot: BookSlot):
     today = datetime.now(IST)
@@ -142,5 +139,5 @@ async def book_slot(slot: BookSlot):
     booked_slots.append((start, end))
     for user_id in users_busy_slots:
         users_busy_slots[user_id].append((start, end))
-        users_busy_slots[user_id].sort(key=lambda x: x[0])  # Keep sorted
+        users_busy_slots[user_id].sort(key=lambda x: x[0])
     return {"message": "Slot booked successfully"}
